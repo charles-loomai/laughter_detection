@@ -1,16 +1,16 @@
 
 from bs4 import BeautifulSoup as bs
 import argparse
+from collections import defaultdict
 
 """ This script takes as input an ICSI transcript file (.mrt) and returns the duration statistics of the 4 different kinds of laughters:
     1) laugh alone segments
     2) laughing during uttering a word
-    3) laughing in utterance but not during a word
     4) breath laugh
 
     python get_laughter_stats.py <input_transcript>
 
-    Returns a tuple with the above durations in same order
+    Returns a directory containing segments information of the different laughters 
 """
 
 
@@ -18,33 +18,45 @@ def get_laughter_stats(inp_transcript, out_dir):
     with open(inp_transcript,'r') as f:
         contents = f.read()
 
-    #print(contents)
     xml_file = bs(contents)
 
-    while_laughing = [wl for wl in xml_file.find_all('comment') if wl['description'] == 'while laughing']
-    breath_laugh = [wl for wl in xml_file.find_all('vocalsound') if wl['description'] == 'breath-laugh']
-    laugh = [wl for wl in xml_file.find_all('vocalsound') if 'laugh' in wl['description']]
+    # Get channel information for each speaker
+    channel_dict = defaultdict()
+    for speaker in [spk for spk in xml_file.find_all('participant') if spk.has_attr('channel')]:
+        channel_dict[speaker['name']] = speaker['channel']
 
+    # Write out timing information for breath-laugh segments
     bl_file = open("{0}/breath_laugh_segments.txt".format(out_dir), 'w')
-    for seg in [bl for bl in xml_file.find_all('segment') if bl.find('vocalsound')]:
-        if not seg.find('comment') or seg.find('comment')['description'] != 'Digits':
-            if 'breath-laugh' in seg.find('vocalsound')['description']:
-                bl_file.write("{0} {1}\n".format(seg['starttime'], seg['endtime']))
+    for seg in [bl for bl in xml_file.find_all('segment') if bl.find('vocalsound') and bl.has_attr('participant')]:
+        if seg['participant'] in channel_dict.keys():
+            if not seg.find('comment') or seg.find('comment')['description'] != 'Digits':
+                vocal_descriptions = [voc['description'] for voc in seg.find_all('vocalsound')]
+                for voc in vocal_descriptions:
+                    if 'breath-laugh' in voc:
+                        bl_file.write("{0} {1} {2}\n".format(seg['starttime'], seg['endtime'], channel_dict[seg['participant']]))
 
     bl_file.close()
 
+    # Write out timing information for laugh only segments
     l_file = open("{0}/laugh_segments.txt".format(out_dir), 'w')
-    for seg in [bl for bl in xml_file.find_all('segment') if bl.find('vocalsound')]:
-        if not seg.find('comment') or seg.find('comment')['description'] != 'Digits':
-            if 'laugh' in seg.find('vocalsound')['description'] and 'breath-laugh' not in seg.find('vocalsound')['description']:
-                l_file.write("{0} {1}\n".format(seg['starttime'], seg['endtime']))
+    for seg in [bl for bl in xml_file.find_all('segment') if bl.find('vocalsound') and bl.has_attr('participant')]:
+        if seg['participant'] in channel_dict.keys():
+            if not seg.find('comment') or seg.find('comment')['description'] != 'Digits':
+                vocal_descriptions = [voc['description'] for voc in seg.find_all('vocalsound')]
+                for voc in vocal_descriptions:
+                    if 'laugh' in voc and 'breath-laugh' not in voc:
+                        l_file.write("{0} {1} {2}\n".format(seg['starttime'], seg['endtime'], channel_dict[seg['participant']]))
 
     l_file.close()
 
+    # Write out timing information for while-laughing segments
     wl_file = open("{0}/while_laughing_segments.txt".format(out_dir), 'w')
-    for seg in [bl for bl in xml_file.find_all('segment') if bl.find('comment')]:
-        if 'while laughing' in seg.find('comment')['description']:
-            wl_file.write("{0} {1}\n".format(seg['starttime'], seg['endtime']))
+    for seg in [bl for bl in xml_file.find_all('segment') if bl.find('comment') and bl.has_attr('participant')]:
+        if seg['participant'] in channel_dict.keys():
+            com_descriptions = [com['description'] for com in seg.find_all('comment')]
+            for desc in com_descriptions:
+                if 'while laughing' in desc:
+                    wl_file.write("{0} {1} {2}\n".format(seg['starttime'], seg['endtime'], channel_dict[seg['participant']]))
     wl_file.close()
 
 
