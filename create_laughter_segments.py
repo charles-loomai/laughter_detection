@@ -9,13 +9,13 @@ from collections import defaultdict
     3) laughing during utterance overlapping with speech (while lauging)
     4) breath laugh
 
-    python get_laughter_stats.py <input_transcript> <output_directory>
+    python create_laughter_segments.py <input_transcript> <output_directory>
 
     Returns segments information of the different laughter types in output directory 
 """
 
 
-def get_laughter_stats(inp_transcript, out_dir):
+def create_laughter_segments(inp_transcript, out_dir):
     with open(inp_transcript,'r') as f:
         contents = f.read()
 
@@ -79,4 +79,4 @@ if __name__ == "__main__":
 
     inp_transcript = args.inp_transcript
     out_dir = args.out_dir
-    get_laughter_stats(inp_transcript, out_dir)
+    create_laughter_segments(inp_transcript, out_dir)
