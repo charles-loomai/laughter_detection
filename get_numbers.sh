@@ -25,7 +25,7 @@ while read -r line; do
     laughter_within=$(( $laughter_within + $(echo $num_laughter_within | cut -d" " -f1)))
     breath=$(( $breath + $(echo $num_breath | cut -d" " -f1)))
     while=$(( $while + $(echo $num_while | cut -d" " -f1)))
-
+    #echo "$ses $(echo $num_laughter_only | cut -d" " -f1)" #>> ../../num_laughter_only.txt 
 done < ${ses_list}
 
 echo "Number of laughter only segments = "$laughter_only

@@ -16,7 +16,7 @@ def get_laughter_hist(segments_dir, ses_list):
     for ses in sessions:
         if 'Bmr' in ses.strip():
             # Laugh only segments
-            with open("{0}/{1}/laugh_utterance_segments.txt".format(segments_dir, ses.strip()), 'r') as f:
+            with open("{0}/{1}/laugh_only_segments.txt".format(segments_dir, ses.strip()), 'r') as f:
                 lines = f.readlines()
 
             for seg in lines:
