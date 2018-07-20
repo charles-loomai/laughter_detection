@@ -28,13 +28,14 @@ def create_laughter_segments(inp_transcript, out_dir):
 
     # Write out timing information for breath-laugh segments
     for seg in [bl for bl in xml_file.find_all('segment') if bl.find('vocalsound') and bl.has_attr('participant')]:
-        if seg['participant'] in channel_dict.keys():
-            chan = channel_dict[seg['participant']]
+        spkr = seg['participant']
+        if spkr in channel_dict.keys():
+            chan = channel_dict[spkr]
             if not seg.find('comment') or seg.find('comment')['description'] != 'Digits':
                 vocal_descriptions = [voc['description'] for voc in seg.find_all('vocalsound')]
                 for voc in vocal_descriptions:
                     if 'breath-laugh' in voc:
-                        bl_file = open("{0}/breath_laugh_segments_{1}.txt".format(out_dir,chan), 'a')
+                        bl_file = open("{0}/breath-laugh-segments_{1}_{2}.txt".format(out_dir, chan, spkr), 'a')
                         bl_file.write("{0} {1}\n".format(seg['starttime'], seg['endtime']))
 
                         bl_file.close()
@@ -44,30 +45,32 @@ def create_laughter_segments(inp_transcript, out_dir):
     # Write out timing information for laugh segments within utterance but not overlapping with word
 
     for seg in [bl for bl in xml_file.find_all('segment') if bl.find('vocalsound') and bl.has_attr('participant')]:
-        if seg['participant'] in channel_dict.keys():
-            chan = channel_dict[seg['participant']]
+        spkr = seg['participant']
+        if spkr in channel_dict.keys():
+            chan = channel_dict[spkr]
             if not seg.find('comment') or seg.find('comment')['description'] != 'Digits':
                 vocal_descriptions = [voc['description'] for voc in seg.find_all('vocalsound')]
                 for voc in vocal_descriptions:
                     if 'laugh' in voc and 'breath-laugh' not in voc:
                         if not "{0}".format(seg.contents[0]).strip():  # The segment doesn't contain any speech. Only laughter
-                            l_only_file = open("{0}/laugh_only_segments_{1}.txt".format(out_dir, chan), 'a')
+                            l_only_file = open("{0}/laugh-only-segments_{1}_{2}.txt".format(out_dir, chan, spkr), 'a')
                             l_only_file.write("{0} {1}\n".format(seg['starttime'], seg['endtime']))
                             l_only_file.close()
                         else:
-                            l_file = open("{0}/laugh_utterance_segments_{1}.txt".format(out_dir, chan), 'a')
+                            l_file = open("{0}/laugh-utterance-segments_{1}_{2}.txt".format(out_dir, chan, spkr), 'a')
                             l_file.write("{0} {1}\n".format(seg['starttime'], seg['endtime']))
 
                             l_file.close()
 
     # Write out timing information for while-laughing segments
     for seg in [bl for bl in xml_file.find_all('segment') if bl.find('comment') and bl.has_attr('participant')]:
-        if seg['participant'] in channel_dict.keys():
-            chan = channel_dict[seg['participant']]
+        spkr = seg['participant']
+        if spkr in channel_dict.keys():
+            chan = channel_dict[spkr]
             com_descriptions = [com['description'] for com in seg.find_all('comment')]
             for desc in com_descriptions:
                 if 'while laughing' in desc:
-                    wl_file = open("{0}/while_laughing_segments_{1}.txt".format(out_dir, chan), 'a')
+                    wl_file = open("{0}/while-laughing-segments_{1}_{2}.txt".format(out_dir, chan, spkr), 'a')
                     wl_file.write("{0} {1}\n".format(seg['starttime'], seg['endtime']))
                     wl_file.close()
 
