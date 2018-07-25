@@ -27,7 +27,7 @@ def create_speech_segments(inp_transcript, out_dir):
         channel_dict[speaker['name']] = speaker['channel']
 
     # Write out timing information for breath-laugh segments
-    for seg in [bl for bl in xml_file.find_all('segment') if not (bl.find('vocalsound') or bl.find('nonvocalsound')) and bl.has_attr('participant')]:
+    for seg in [bl for bl in xml_file.find_all('segment') if not (bl.find('vocalsound') or bl.find('nonvocalsound')) and bl.has_attr('participant') and not bl.find('uncertain')]:
         spkr = seg['participant']
         if spkr in channel_dict.keys():
             chan = channel_dict[spkr]

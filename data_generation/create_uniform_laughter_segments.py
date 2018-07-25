@@ -12,8 +12,12 @@ def make_uniform_from_short(dur, segment_length, start):
 
     start_new = 0
     while start_new <= 0:
-        offset_from_start = ran.uniform(0, -deficit)
-        start_new = start + offset_from_start
+        if start != 0:
+            offset_from_start = ran.uniform(0, -deficit)
+            start_new = start + offset_from_start
+        else:
+            start_new = start
+            break
 
     end_new = start_new + segment_length
 
