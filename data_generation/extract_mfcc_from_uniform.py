@@ -16,7 +16,7 @@ Returns
 """
 
 
-def extract_mfcc_from_uniform(segments_file, features_file):
+def extract_mfcc_from_uniform(segments_file, features_file, num_frames_in_segment):
 
     with open(segments_file, 'r') as f:
         segments = f.readlines()[1:]
@@ -29,15 +29,20 @@ def extract_mfcc_from_uniform(segments_file, features_file):
     feats_mfcc_de_de = []
 
     mfcc_all_indices = [x for x, elem in enumerate(features[0].split(';')) if 'mfcc_sma' in elem]
+    pitch_indices = [x for x, elem in enumerate(features[0].split(';')) if 'F0_sma' in elem]
 
-    mfcc_indices = mfcc_all_indices[0:14]
-    mfcc_de_indices = mfcc_all_indices[14:28]
-    mfcc_de_de_indices = mfcc_all_indices[28:42]
+    mfcc_indices = mfcc_all_indices[0:13]
+    mfcc_de_indices = mfcc_all_indices[14:27]
+    mfcc_de_de_indices = mfcc_all_indices[28:41]
 
     start_times_segments = [float(seg.split(',')[0]) for seg in segments]
     start_times_features = [float(feat.split(';')[1]) for feat in features[1:]]
 
     for seg_times in start_times_segments:
+        feats_mfcc_seg = []
+        feats_mfcc_de_seg = []
+        feats_mfcc_de_de_seg = []
+
         seg = round(seg_times, 2)  # Rounds to 2 decimal points. This is the precision offered in the features
         if seg in start_times_features:
             line_num = int(start_times_features.index(seg))
@@ -46,9 +51,22 @@ def extract_mfcc_from_uniform(segments_file, features_file):
             print(segments_file, seg_times)
             exit(1)
 
-        feats_mfcc.append([float(f) for idx, f in enumerate(features[line_num+1].split(';')) if idx in mfcc_indices])
-        feats_mfcc_de.append([float(f) for idx, f in enumerate(features[line_num + 1].split(';')) if idx in mfcc_de_indices])
-        feats_mfcc_de_de.append([float(f) for idx, f in enumerate(features[line_num + 1].split(';')) if idx in mfcc_de_de_indices])
+        for feats in features[line_num+1 : line_num+1+num_frames_in_segment]:
+            temp = [float(f) for idx, f in enumerate(feats.split(';')) if idx in mfcc_indices]
+            temp.append(float(feats.split(';')[pitch_indices[0]]))
+            feats_mfcc_seg.append(temp)
+
+            temp = [float(f) for idx, f in enumerate(feats.split(';')) if idx in mfcc_de_indices]
+            temp.append(float(feats.split(';')[pitch_indices[1]]))
+            feats_mfcc_de_seg.append(temp)
+
+            temp = [float(f) for idx, f in enumerate(feats.split(';')) if idx in mfcc_de_de_indices]
+            temp.append(float(feats.split(';')[pitch_indices[2]]))
+            feats_mfcc_de_de_seg.append(temp)
+
+        feats_mfcc.append(feats_mfcc_seg)
+        feats_mfcc_de.append(feats_mfcc_de_seg)
+        feats_mfcc_de_de.append(feats_mfcc_de_de_seg)
 
     feats_mfcc = np.transpose(np.array(feats_mfcc))
     feats_mfcc_de = np.transpose(np.array(feats_mfcc_de))
@@ -58,6 +76,11 @@ def extract_mfcc_from_uniform(segments_file, features_file):
 
 
 if __name__=='__main__':
+
+    uniform_seg_length = 1  # in seconds
+    frame_shift = 10  # in msec
+
+    num_frames_in_segment = int(uniform_seg_length*1000/frame_shift)  # Assuming 10 msec frame shift and a 1sec uniform segment
 
     with open('../../../data/ses_list', 'r') as f:
         sessions = [ses.strip() for ses in f.readlines()]
@@ -75,15 +98,16 @@ if __name__=='__main__':
 
         for seg_file in segment_files:
             chan = seg_file.split('/')[-1].split('_')[1]
-            features_files = glob.glob(os.path.join(inp_feats_dir, '{0}_{1}*'.format(session_id, chan)))[0]
+            spkr = seg_file.split('/')[-1].split('_')[2]
+            features_files = glob.glob(os.path.join(inp_feats_dir, '{0}_{1}*'.format(session_id, chan)))
+            if features_files:  # Only if features for corresponding channels are present
+                (mfcc, mfcc_de, mfcc_de_de) = extract_mfcc_from_uniform(seg_file, features_files[0], num_frames_in_segment)
 
-            (mfcc, mfcc_de, mfcc_de_de) = extract_mfcc_from_uniform(seg_file, features_files)
+                with open('{0}/{3}_{1}_{2}_mfcc.pickle'.format(out_feat_dir, chan, spkr, session_id), 'wb') as f:
+                    pickle.dump(mfcc, f)
 
-            with open('{0}/{1}_mfcc.pickle'.format(out_feat_dir, chan), 'wb') as f:
-                pickle.dump(mfcc, f)
+                with open('{0}/{3}_{1}_{2}_mfcc-de.pickle'.format(out_feat_dir, chan, spkr, session_id), 'wb') as f:
+                    pickle.dump(mfcc_de, f)
 
-            with open('{0}/{1}_mfcc-de.pickle'.format(out_feat_dir, chan), 'wb') as f:
-                pickle.dump(mfcc_de, f)
-
-            with open('{0}/{1}_mfcc-de-de.pickle'.format(out_feat_dir, chan),'wb') as f:
-                pickle.dump(mfcc_de_de, f)
+                with open('{0}/{3}_{1}_{2}_mfcc-de-de.pickle'.format(out_feat_dir, chan, spkr, session_id),'wb') as f:
+                    pickle.dump(mfcc_de_de, f)
