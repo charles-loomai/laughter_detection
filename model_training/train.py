@@ -53,11 +53,11 @@ def load_feats(feats_dir, trainORtest, splice_context, required_num_segments):
                                                                         "_".join(feats.split("/")[-1].split("_")[0:2])))
 
 
-
     # Extract one file to get feature dimension and frames
     feat = pickle.load(open(mfcc_feat_files[0], 'rb'))
     feat_dim, num_frames, segments = feat.shape
 
+    # Initialize the feature arrays
     feats_spliced = np.zeros((feat_dim*(2*splice_context + 1), num_frames, required_num_segments))
     feats_de_spliced = np.zeros((feat_dim * (2 * splice_context + 1), num_frames, required_num_segments))
     feats_de_de_spliced = np.zeros((feat_dim * (2 * splice_context + 1), num_frames, required_num_segments))
@@ -73,7 +73,7 @@ def load_feats(feats_dir, trainORtest, splice_context, required_num_segments):
                 feats_spliced[:, :, total_segments - feat.shape[2]: total_segments] = feat_splice(feat[:, :, 0:segments_required], splice_context)
                 break
             else:
-                feats_spliced[:, :, total_segments - feat.shape[2] : total_segments] = feat_splice(feat, splice_context)
+                feats_spliced[:, :, total_segments - feat.shape[2]: total_segments] = feat_splice(feat, splice_context)
 
             # delta
             feat = pickle.load(open(mfcc_de_feat_files[idx], 'rb'))
@@ -105,12 +105,14 @@ def main(feat_dir, model_dir):
     # Data parameters
     splice_context = 3
     num_laugh_segments = 5000  # minority class number of samples
+
     # Training params Baseline (DNN)
 
-    # As input frame has 13 mfcc features. +/-3 frames splicing. delta, delta-deltas.. 273 = 13*7*3
+    # As input frame has 13 mfcc features and 1 pitch feature. +/-3 frames splicing. delta, delta-deltas.. 14*7*3
     # 100 frames per segment (uniform 1 sec segments)
-    training_params_DNN = {'input_shape': (273, 100),
+    training_params_DNN = {'input_shape': (294, 100),
                            'num_epochs': 10,
+                           'batch_size': 32,  # number of segments of length 1sec in batch
                            'num_FC_layers': 2,
                            'num_FC_units': (400, 400),
                            'dropout_rate': 0.2,
@@ -118,6 +120,8 @@ def main(feat_dir, model_dir):
                            'Batch_norm_momentum': 0.99
                            }
 
+    for epoch in range(training_params_DNN['num_epochs']):
+        num_batches = #total_number_uniform_segments_for_train/batch_size
     # Splice and Load pre-extracted train/test features
     feats_train, feats_de_train, feats_de_de_train = load_feats(feat_dir, 'train', splice_context, num_laugh_segments)
     feats_test, feats_de_test, feats_de_de_test = load_feats(feat_dir, 'test', splice_context, num_laugh_segments)

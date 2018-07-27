@@ -71,8 +71,8 @@ def extract_mfcc_from_uniform(segments_file, features_file, num_frames_in_segmen
     feats_mfcc = np.transpose(np.array(feats_mfcc))
     feats_mfcc_de = np.transpose(np.array(feats_mfcc_de))
     feats_mfcc_de_de = np.transpose(np.array(feats_mfcc_de_de))
-
-    return feats_mfcc, feats_mfcc_de, feats_mfcc_de_de
+    #print(segments)
+    return feats_mfcc, feats_mfcc_de, feats_mfcc_de_de, len(segments)
 
 
 if __name__=='__main__':
@@ -95,19 +95,20 @@ if __name__=='__main__':
             os.makedirs(out_feat_dir)
 
         segment_files = glob.glob(os.path.join(inp_seg_dir, '*.csv'))
+        #print(segment_files)
 
         for seg_file in segment_files:
             chan = seg_file.split('/')[-1].split('_')[1]
             spkr = seg_file.split('/')[-1].split('_')[2]
             features_files = glob.glob(os.path.join(inp_feats_dir, '{0}_{1}*'.format(session_id, chan)))
             if features_files:  # Only if features for corresponding channels are present
-                (mfcc, mfcc_de, mfcc_de_de) = extract_mfcc_from_uniform(seg_file, features_files[0], num_frames_in_segment)
+                (mfcc, mfcc_de, mfcc_de_de, num_seg) = extract_mfcc_from_uniform(seg_file, features_files[0], num_frames_in_segment)
 
-                with open('{0}/{3}_{1}_{2}_mfcc.pickle'.format(out_feat_dir, chan, spkr, session_id), 'wb') as f:
+                with open('{0}/{3}_{1}_{2}_{4}_mfcc.pickle'.format(out_feat_dir, chan, spkr, session_id, num_seg), 'wb') as f:
                     pickle.dump(mfcc, f)
 
-                with open('{0}/{3}_{1}_{2}_mfcc-de.pickle'.format(out_feat_dir, chan, spkr, session_id), 'wb') as f:
+                with open('{0}/{3}_{1}_{2}_{4}_mfcc-de.pickle'.format(out_feat_dir, chan, spkr, session_id, num_seg), 'wb') as f:
                     pickle.dump(mfcc_de, f)
 
-                with open('{0}/{3}_{1}_{2}_mfcc-de-de.pickle'.format(out_feat_dir, chan, spkr, session_id),'wb') as f:
+                with open('{0}/{3}_{1}_{2}_{4}_mfcc-de-de.pickle'.format(out_feat_dir, chan, spkr, session_id, num_seg),'wb') as f:
                     pickle.dump(mfcc_de_de, f)

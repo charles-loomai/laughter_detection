@@ -1,12 +1,12 @@
 #!/bin/bash
 
-type_of_sound=speech  # laugh or speech
+type_of_sound=laugh  # laugh or speech
 
 segment_length=1  # in seconds
 
 
-input_seg_dir=/home/raghuveer/work/TILES/laughter/data/data_generation/${type_of_sound}_segments_chan/ 
-#input_seg_dir=/home/raghuveer/work/TILES/laughter/data/data_generation/corrected_annotations/
+#input_seg_dir=/home/raghuveer/work/TILES/laughter/data/data_generation/${type_of_sound}_segments_chan/ 
+input_seg_dir=/home/raghuveer/work/TILES/laughter/data/data_generation/corrected_annotations/
 
 output_seg_dir_base=/home/raghuveer/work/TILES/laughter/data/data_generation/${type_of_sound}_uniform_segments
 
