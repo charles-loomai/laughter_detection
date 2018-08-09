@@ -1,132 +1,144 @@
 import os
 import glob
-from random import shuffle
-import pickle
 import numpy as np
-
-
-def padding(feat_array, splice_context):
-    feat_dimension, num_frames = feat_array.shape
-    feat_array_padded = np.zeros((feat_dimension, num_frames + 2*splice_context))
-    feat_array_padded[:, splice_context:num_frames + splice_context] = feat_array[:,:]
-    for ctx in range(splice_context):
-        feat_array_padded[:, ctx] = feat_array[:,0]
-        feat_array_padded[:, num_frames + ctx] = feat_array[:, -1]
-
-    return feat_array_padded
-
-
-def feat_splice(feature_array, splice_context):
-
-    feat_dim, num_frames, num_segments = feature_array.shape
-    feat_array_spliced = np.zeros((feat_dim*(splice_context*2 + 1), num_frames, num_segments))
-    for segments in range(num_segments):
-        feat_array_padded = padding(feature_array[:, :, segments], splice_context)
-
-        for frame in range(num_frames):
-            for splice in range(splice_context*2 + 1):
-                feat_array_spliced[splice*feat_dim: feat_dim + splice*feat_dim, frame, segments] = feat_array_padded[:, frame + splice]
-
-    return feat_array_spliced
-
-
-def load_feats(feats_dir, trainORtest, splice_context, required_num_segments):
-    feats_train_dir = "{0}/{1}/".format(feats_dir, trainORtest)
-
-    with open(feats_train_dir + '/{0}_spkr.list'.format(trainORtest)) as f:
-        train_spkrs = [x.strip() for x in f.readlines()]
-
-    mfcc_feat_files = []
-    mfcc_de_feat_files = []
-    mfcc_de_de_feat_files = []
-
-    for spkr in train_spkrs:
-        mfcc_feat_files.append(glob.glob(os.path.join('{0}/speech/{1}/'.format(feats_train_dir, spkr), "*_mfcc.pickle")))
-    mfcc_feat_files = [y for x in mfcc_feat_files for y in x]
-    shuffle(mfcc_feat_files)
-
-    # Get corresponding delta, delta-delta features
-    for feats in mfcc_feat_files:
-        mfcc_de_feat_files.append("{0}/{1}_mfcc-de.pickle".format("/".join(feats.split("/")[0:-1]),
-                                                                  "_".join(feats.split("/")[-1].split("_")[0:2])))
-        mfcc_de_de_feat_files.append("{0}/{1}_mfcc-de-de.pickle".format("/".join(feats.split("/")[0:-1]),
-                                                                        "_".join(feats.split("/")[-1].split("_")[0:2])))
-
-
-    # Extract one file to get feature dimension and frames
-    feat = pickle.load(open(mfcc_feat_files[0], 'rb'))
-    feat_dim, num_frames, segments = feat.shape
-
-    # Initialize the feature arrays
-    feats_spliced = np.zeros((feat_dim*(2*splice_context + 1), num_frames, required_num_segments))
-    feats_de_spliced = np.zeros((feat_dim * (2 * splice_context + 1), num_frames, required_num_segments))
-    feats_de_de_spliced = np.zeros((feat_dim * (2 * splice_context + 1), num_frames, required_num_segments))
-
-    total_segments = 0
-    while total_segments <= required_num_segments:
-        for idx, files in enumerate(mfcc_feat_files):
-            # mfcc
-            feat = pickle.load(open(files, 'rb'))
-            total_segments += feat.shape[2]
-            if total_segments > required_num_segments:
-                segments_required = required_num_segments - (total_segments - feat.shape[2])
-                feats_spliced[:, :, total_segments - feat.shape[2]: total_segments] = feat_splice(feat[:, :, 0:segments_required], splice_context)
-                break
-            else:
-                feats_spliced[:, :, total_segments - feat.shape[2]: total_segments] = feat_splice(feat, splice_context)
-
-            # delta
-            feat = pickle.load(open(mfcc_de_feat_files[idx], 'rb'))
-            if total_segments > required_num_segments:
-                segments_required = required_num_segments - (total_segments - feat.shape[2])
-                feats_de_spliced[:, :, total_segments - feat.shape[2]: total_segments] = \
-                    feat_splice(feat[:, :, 0:segments_required], splice_context)
-                break
-            else:
-                feats_de_spliced[:, :, total_segments - feat.shape[2]: total_segments] = \
-                    feat_splice(feat, splice_context)
-
-            # delta-delta
-            feat = pickle.load(open(mfcc_de_de_feat_files[idx], 'rb'))
-            if total_segments > required_num_segments:
-                segments_required = required_num_segments - (total_segments - feat.shape[2])
-                feats_de_de_spliced[:, :, total_segments - feat.shape[2]: total_segments] = feat_splice(
-                    feat[:, :, 0:segments_required], splice_context)
-                break
-            else:
-                feats_de_de_spliced[:, :, total_segments - feat.shape[2]: total_segments] = feat_splice(feat,
-                                                                                                     splice_context)
-
-    return feats_spliced, feats_de_spliced, feats_de_de_spliced
+import pickle
+from keras.optimizers import Adam, RMSprop
+from model import create_network_baseline, train
+from DataGeneratorClass import DataGenerator
+from data_processing import feat_splice
 
 
 def main(feat_dir, model_dir):
 
-    # Data parameters
-    splice_context = 3
-    num_laugh_segments = 5000  # minority class number of samples
+    train_feat_dir = "{0}/train/".format(feat_dir)
+    val_feat_dir = "{0}/val/".format(feat_dir)
+
+    # Data gneerator parameters
+    data_gen_params = {'splice_context': 3,
+                       'inp_dim': (294,),
+                       'target_dim': (1, 1),
+                       'batch_size': 32
+                       }
 
     # Training params Baseline (DNN)
 
-    # As input frame has 13 mfcc features and 1 pitch feature. +/-3 frames splicing. delta, delta-deltas.. 14*7*3
-    # 100 frames per segment (uniform 1 sec segments)
-    training_params_DNN = {'input_shape': (294, 100),
+    # As input frame has 13 mfcc features and 1 pitch feature. +/-3 frames splicing. delta, delta-deltas.. 14*7*3=294
+    # 32 spliced frames per batch
+    training_params_DNN = {'input_shape': (294,),
                            'num_epochs': 10,
-                           'batch_size': 32,  # number of segments of length 1sec in batch
                            'num_FC_layers': 2,
-                           'num_FC_units': (400, 400),
+                           'num_FC_units': (200, 200),
                            'dropout_rate': 0.2,
                            'Batch_norm_FLAG': True,
-                           'Batch_norm_momentum': 0.99
+                           'Batch_norm_momentum': 0.99,
+                           'l1_regularizer_weight' : 10e-3,
+                           'init_learning_rate': 0.0001
                            }
 
-    for epoch in range(training_params_DNN['num_epochs']):
-        num_batches = #total_number_uniform_segments_for_train/batch_size
-    # Splice and Load pre-extracted train/test features
-    feats_train, feats_de_train, feats_de_de_train = load_feats(feat_dir, 'train', splice_context, num_laugh_segments)
-    feats_test, feats_de_test, feats_de_de_test = load_feats(feat_dir, 'test', splice_context, num_laugh_segments)
+    # Initialize model
+    model = create_network_baseline(training_params_DNN)
+    model.summary()
+    # Compile model
+    model.compile(optimizer=Adam(lr=training_params_DNN['init_learning_rate']),
+                  loss='binary_crossentropy',
+                  metrics=['accuracy'])
 
-    x = 0
+    # Validation data
+    splice_context = data_gen_params['splice_context']
+
+    validation_directory_laugh = '/media/External_HD/tiles_audio/train_test/val/laugh/me018/'
+    val_files_laugh = glob.glob(os.path.join(validation_directory_laugh, "*_mfcc.pickle"))
+
+    validation_directory_speech = '/media/External_HD/tiles_audio/train_test/val/speech/me028/'
+    val_files_speech = glob.glob(os.path.join(validation_directory_speech, "*_mfcc.pickle"))
+
+    val_feats_laugh = np.empty((len(val_files_laugh)),dtype=object)
+    labels_frames_laugh = []
+    for idx, file in enumerate(val_files_laugh):
+        label = 1
+        ses_id = file.split("/")[-1].strip('.pickle').split("_")[0]
+        num_frames = int(file.split("/")[-1].strip('.pickle').split("_")[1])
+
+        labels_frames_laugh.append([label] * num_frames)
+
+        feat_file_de = "{0}/{1}_{2}_mfcc-de.pickle".format("/".join(file.split("/")[0:-1]), ses_id, num_frames)
+        feat_file_de_de = "{0}/{1}_{2}_mfcc-de-de.pickle".format("/".join(file.split("/")[0:-1]), ses_id,
+                                                                 num_frames)
+        with open(file, 'rb') as f:
+            temp = np.vstack(list(pickle.load(f)[0]))
+            feats_laugh = feat_splice(np.transpose(temp), splice_context)
+
+        with open(feat_file_de, 'rb') as f:
+            temp = np.vstack(list(pickle.load(f)[0]))
+            feats_laugh_de = feat_splice(np.transpose(temp), splice_context)
+
+        with open(feat_file_de_de, 'rb') as f:
+            temp = np.vstack(list(pickle.load(f)[0]))
+            feats_laugh_de_de = feat_splice(np.transpose(temp), splice_context)
+
+        val_feats_laugh[idx] = np.transpose(np.row_stack((feats_laugh, feats_laugh_de,feats_laugh_de_de)))
+
+    val_feats_speech = np.empty((len(val_files_speech)), dtype=object)
+    labels_frames_speech = []
+    for idx, file in enumerate(val_files_speech):
+        label = 0
+        ses_id = file.split("/")[-1].strip('.pickle').split("_")[0]
+        num_frames = int(file.split("/")[-1].strip('.pickle').split("_")[1])
+
+        labels_frames_speech.append([label] * num_frames)
+
+        feat_file_de = "{0}/{1}_{2}_mfcc-de.pickle".format("/".join(file.split("/")[0:-1]), ses_id, num_frames)
+        feat_file_de_de = "{0}/{1}_{2}_mfcc-de-de.pickle".format("/".join(file.split("/")[0:-1]), ses_id,
+                                                                 num_frames)
+        with open(file, 'rb') as f:
+            temp = np.vstack(list(pickle.load(f)[0]))
+            feats_laugh = feat_splice(np.transpose(temp), splice_context)
+
+        with open(feat_file_de, 'rb') as f:
+            temp = np.vstack(list(pickle.load(f)[0]))
+            feats_laugh_de = feat_splice(np.transpose(temp), splice_context)
+
+        with open(feat_file_de_de, 'rb') as f:
+            temp = np.vstack(list(pickle.load(f)[0]))
+            feats_laugh_de_de = feat_splice(np.transpose(temp), splice_context)
+
+        val_feats_speech[idx] = np.transpose(np.row_stack((feats_laugh, feats_laugh_de, feats_laugh_de_de)))
+
+    #for epoch in range(training_params_DNN['num_epochs']):
+
+    Generator = DataGenerator(**data_gen_params)
+
+    training_gen = Generator.load_DataGenerators(train_feat_dir)
+    val_gen = Generator.load_DataGenerators(val_feat_dir)
+
+    model = train(model, training_gen,
+                  val_gen,
+                  epochs=training_params_DNN['num_epochs'],
+                  train_steps_per_epoch=19000,
+                  val_steps_per_epoch=1000
+                  )
+
+        # acc_laugh = 0
+        # acc_speech = 0
+        # for idx, val_feat in enumerate(val_feats_laugh):
+        #
+        #     out = model.predict(val_feat)
+        #     target = np.array(labels_frames_laugh[idx], dtype=float)
+        #
+        #     out = [float(x >= 0.5) for y in list(out) for x in y]
+        #     out = np.array(out)
+        #     acc_laugh += np.sum(out == target)/out.shape[0]
+        # for idx, val_feat in enumerate(val_feats_speech):
+        #
+        #     out = model.predict(val_feat)
+        #     target = np.array(labels_frames_speech[idx], dtype=float)
+        #
+        #     out = [float(x >= 0.5) for y in list(out) for x in y]
+        #     out = np.array(out)
+        #     acc_speech += np.sum(out == target) / out.shape[0]
+        #
+        # print("laugh_acc = ", acc_laugh)
+        # print("speech_acc = ", acc_speech)
 
 
 if __name__ == '__main__':
