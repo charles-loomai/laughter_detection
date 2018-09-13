@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn import preprocessing
 
 
 def padding(feat_array, splice_context):
@@ -24,3 +25,14 @@ def feat_splice(feature_array, splice_context):
             feat_array_spliced[splice*feat_dim: feat_dim + splice*feat_dim, frame] = feat_array_padded[:, frame + splice]
 
     return feat_array_spliced
+
+
+def normalize(feature_array):
+    feature_array_norm = np.empty(np.shape(feature_array))
+
+    num_frames, feat_dim = np.shape(feature_array)
+
+    for feat in range(feat_dim):
+        feature_array_norm[:, feat] = feature_array[:, feat] - np.mean(feature_array[:, feat])
+
+    return feature_array_norm

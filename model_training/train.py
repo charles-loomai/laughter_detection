@@ -2,10 +2,11 @@ import os
 import glob
 import numpy as np
 import pickle
-from keras.optimizers import Adam, RMSprop
+from keras.optimizers import Adam, RMSprop, Adagrad
 from model import create_network_baseline, train
 from DataGeneratorClass import DataGenerator
 from data_processing import feat_splice
+import pdb
 
 
 def main(feat_dir, model_dir):
@@ -14,32 +15,35 @@ def main(feat_dir, model_dir):
     val_feat_dir = "{0}/val/".format(feat_dir)
 
     # Data gneerator parameters
-    data_gen_params = {'splice_context': 3,
+    data_gen_params = {'splice_context': 25,
                        'inp_dim': (294,),
                        'target_dim': (1, 1),
-                       'batch_size': 32
+                       'batch_size': 100
                        }
 
     # Training params Baseline (DNN)
 
     # As input frame has 13 mfcc features and 1 pitch feature. +/-3 frames splicing. delta, delta-deltas.. 14*7*3=294
     # 32 spliced frames per batch
-    training_params_DNN = {'input_shape': (294,),
-                           'num_epochs': 10,
-                           'num_FC_layers': 2,
-                           'num_FC_units': (200, 200),
+    feat_dim = 13
+    spliced_dim = feat_dim*(2*data_gen_params['splice_context'] + 1)
+    print(spliced_dim)
+    training_params_DNN = {'input_shape': (spliced_dim,),
+                           'num_epochs': 30,
+                           'num_FC_layers': 4,
+                           'num_FC_units': (256, 128, 64, 32),
                            'dropout_rate': 0.2,
                            'Batch_norm_FLAG': True,
                            'Batch_norm_momentum': 0.99,
-                           'l1_regularizer_weight' : 10e-3,
-                           'init_learning_rate': 0.0001
+                           'l1_regularizer_weight': 0,
+                           'init_learning_rate': 0.001
                            }
 
     # Initialize model
     model = create_network_baseline(training_params_DNN)
     model.summary()
     # Compile model
-    model.compile(optimizer=Adam(lr=training_params_DNN['init_learning_rate']),
+    model.compile(optimizer=RMSprop(lr=training_params_DNN['init_learning_rate']),
                   loss='binary_crossentropy',
                   metrics=['accuracy'])
 
@@ -52,7 +56,7 @@ def main(feat_dir, model_dir):
     validation_directory_speech = '/media/External_HD/tiles_audio/train_test/val/speech/me028/'
     val_files_speech = glob.glob(os.path.join(validation_directory_speech, "*_mfcc.pickle"))
 
-    val_feats_laugh = np.empty((len(val_files_laugh)),dtype=object)
+    val_feats_laugh = np.empty((len(val_files_laugh)), dtype=object)
     labels_frames_laugh = []
     for idx, file in enumerate(val_files_laugh):
         label = 1
@@ -114,8 +118,8 @@ def main(feat_dir, model_dir):
     model = train(model, training_gen,
                   val_gen,
                   epochs=training_params_DNN['num_epochs'],
-                  train_steps_per_epoch=19000,
-                  val_steps_per_epoch=1000
+                  train_steps_per_epoch=int(np.floor((307224+312780)/data_gen_params['batch_size'])),
+                  val_steps_per_epoch=int(np.floor((58013+63944)/data_gen_params['batch_size']))
                   )
 
         # acc_laugh = 0

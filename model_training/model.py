@@ -19,20 +19,34 @@ def create_network_baseline(params):
     input_layer = Input(input_shape)
 
     FC1 = Dense(num_FC_units[0],
-                activation='relu',
-                activity_regularizer=regularizers.l1(l1_reg_weight))(input_layer)
+                activation='relu')(input_layer)#,
+                #activity_regularizer=regularizers.l2(l1_reg_weight))(input_layer)
     FC1 = Dropout(dropout_rate)(FC1)
     if Batch_norm_FLAG:
         FC1 = BatchNormalization(momentum=Batch_norm_momentum)(FC1)
 
     FC2 = Dense(num_FC_units[1],
-                activation='relu',
-                activity_regularizer=regularizers.l1(l1_reg_weight))(FC1)
+                activation='relu')(FC1)#,
+                #activity_regularizer=regularizers.l2(l1_reg_weight))(FC1)
     FC2 = Dropout(dropout_rate)(FC2)
     if Batch_norm_FLAG:
         FC2 = BatchNormalization(momentum=Batch_norm_momentum)(FC2)
 
-    output_layer = Dense(1, activation='sigmoid')(FC2)
+    FC3 = Dense(num_FC_units[2],
+                activation='relu',
+                activity_regularizer=regularizers.l2(l1_reg_weight))(FC2)
+    FC3 = Dropout(dropout_rate)(FC3)
+    if Batch_norm_FLAG:
+        FC3 = BatchNormalization(momentum=Batch_norm_momentum)(FC3)
+
+    FC4 = Dense(num_FC_units[3],
+                activation='relu',
+                activity_regularizer=regularizers.l2(l1_reg_weight))(FC3)
+    FC4 = Dropout(dropout_rate)(FC4)
+    if Batch_norm_FLAG:
+        FC4 = BatchNormalization(momentum=Batch_norm_momentum)(FC4)
+
+    output_layer = Dense(1, activation='sigmoid')(FC4)
 
     return Model(input_layer, output_layer, name='DNN_baseline')
 

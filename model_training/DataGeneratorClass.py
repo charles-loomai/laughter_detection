@@ -3,7 +3,7 @@ import glob
 from random import shuffle
 import pickle
 import numpy as np
-from data_processing import feat_splice
+from data_processing import feat_splice, normalize
 import keras
 
 
@@ -90,21 +90,22 @@ class DataGenerator(object):
                 with open(feat_file, 'rb') as f:
                     feats = pickle.load(f)
                 #print(feat_file)
-                temp = np.vstack(list(feats[0]))
+                t = np.vstack(list(feats[0]))
+                temp = t[:, 0:13] #normalize(t[:, 0:13])  # To remove pitch and use only mfcc
                 feats_spliced = feat_splice(np.transpose(temp), splice_context)
 
                 # delta features
                 with open(feat_file_de, 'rb') as f:
                     feats = pickle.load(f)
                 #feats[0] = [x for y in feats[0] for x in y]
-                temp = np.vstack(list(feats[0]))
+                temp = normalize(np.vstack(list(feats[0])))
                 feats_spliced_de = feat_splice(np.transpose(temp), splice_context)
 
                 # delta-delta features
                 with open(feat_file_de_de, 'rb') as f:
                     feats = pickle.load(f)
                 #feats[0] = [x for y in feats[0] for x in y]
-                temp = np.vstack(list(feats[0]))
+                temp = normalize(np.vstack(list(feats[0])))
                 feats_spliced_de_de = feat_splice(np.transpose(temp), splice_context)
 
                 feat_dim, num_frames = feats_spliced.shape
@@ -112,10 +113,12 @@ class DataGenerator(object):
                 num_batches = int(np.floor(num_frames/batch_size))
 
                 for batch in range(num_batches):
+                    # current_batch_feats = np.transpose(np.row_stack(
+                    #     (feats_spliced[:, batch*batch_size: (batch+1)*batch_size],
+                    #      feats_spliced_de[:, batch * batch_size: (batch + 1) * batch_size],
+                    #      feats_spliced_de_de[:, batch * batch_size: (batch + 1) * batch_size])))
                     current_batch_feats = np.transpose(np.row_stack(
-                        (feats_spliced[:, batch*batch_size: (batch+1)*batch_size],
-                         feats_spliced_de[:, batch * batch_size: (batch + 1) * batch_size],
-                         feats_spliced_de_de[:, batch * batch_size: (batch + 1) * batch_size])))
+                        (feats_spliced[:, batch * batch_size: (batch + 1) * batch_size])))
                     current_batch_labels = labels_frames[batch*batch_size: (batch+1)*batch_size]
 
                     yield current_batch_feats, current_batch_labels
