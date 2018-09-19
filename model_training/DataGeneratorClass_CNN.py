@@ -6,13 +6,9 @@ import numpy as np
 from data_processing import feat_splice, normalize
 import keras
 
-
 class DataGenerator(object):
-    def __init__(self, inp_dim, target_dim, batch_size, splice_context):
-        self.inp_dim = inp_dim
-        self.target_dim = target_dim
+    def __init__(self, batch_size):
         self.batch_size = int(batch_size)
-        self.splice_context = splice_context
 
     def load_DataGenerators(self, feat_dir):
 
@@ -21,7 +17,6 @@ class DataGenerator(object):
             feat_dir_speech = "{0}/speech/".format(feat_dir)
 
             batch_size = self.batch_size
-            splice_context = self.splice_context
 
             # Get all available feature pickle files available
             feat_files_laugh = []
@@ -31,17 +26,17 @@ class DataGenerator(object):
 
             speaker_list_laugh = glob.glob(os.path.join(feat_dir_laugh, "*"))
             speaker_list_speech = glob.glob(os.path.join(feat_dir_speech, "*"))
-            num_laugh_frames = 0
+
             for speaker in speaker_list_laugh:
                 feat_files_laugh.append(glob.glob(os.path.join(feat_dir_laugh + speaker.split("/")[-1] + "/*_mfcc.pickle")))
                 labels_laugh.append([1.0]*len(feat_files_laugh[-1]))
             feat_files_laugh = [x for y in feat_files_laugh for x in y]
             labels_laugh = [x for y in labels_laugh for x in y]
 
+            num_laugh_segments = 0
             for feat_file in feat_files_laugh:
-                num_laugh_frames += int(feat_file.split("/")[-1].strip('.pickle').split("_")[1])
+                num_laugh_segments += int(float(feat_file.split("/")[-1].strip('.pickle').split("_")[1])/100)
 
-            num_speech_frames = 0
             for speaker in speaker_list_speech:
                 feat_files_speech.append(glob.glob(os.path.join(feat_dir_speech + speaker.split("/")[-1] + "/*_mfcc.pickle")))
                 labels_speech.append([0.0] * len(feat_files_speech[-1]))
@@ -50,10 +45,11 @@ class DataGenerator(object):
             labels_speech = [x for y in labels_speech for x in y]
 
             shuffle(feat_files_speech)
+            num_speech_segments = 0
             for idx, feat_file in enumerate(feat_files_speech):
                 #print(feat_file)
-                num_speech_frames += int(feat_file.split("/")[-1].strip('.pickle').split("_")[1])
-                if num_speech_frames < num_laugh_frames:
+                num_speech_segments += int(float(feat_file.split("/")[-1].strip('.pickle').split("_")[1])/100)
+                if num_speech_segments < num_laugh_segments:
                     continue
                 else:
                     stop_idx = idx
@@ -70,6 +66,8 @@ class DataGenerator(object):
             shuffle(temp)
             feat_files, labels = zip(*temp)
 
+            num_segments = 0
+            temp = []
             for idx, feat_file in enumerate(feat_files):
 
                 label = labels[idx]
@@ -77,11 +75,12 @@ class DataGenerator(object):
                 ses_id = feat_file.split("/")[-1].strip('.pickle').split("_")[0]
                 num_frames = int(feat_file.split("/")[-1].strip('.pickle').split("_")[1])
 
-                labels_frames = [label]*num_frames
+                num_segments += int(num_frames/100)
+
+                labels_segments = [label]*num_segments
 
                 feat_file_de = "{0}/{1}_{2}_mfcc-de.pickle".format("/".join(feat_file.split("/")[0:-1]), ses_id, num_frames)
                 feat_file_de_de = "{0}/{1}_{2}_mfcc-de-de.pickle".format("/".join(feat_file.split("/")[0:-1]), ses_id, num_frames)
-
 
                 #feats[0] = [x for y in feats[0] for x in y]
                 #for seg_idx in range(len(feats[0])):
@@ -89,40 +88,25 @@ class DataGenerator(object):
                 # mfcc features
                 with open(feat_file, 'rb') as f:
                     feats = pickle.load(f)
-                #print(feat_file)
-                t = feats[0]
-                temp = t[:, 0:13] #normalize(t[:, 0:13])  # To remove pitch and use only mfcc
-                feats_spliced = feat_splice(np.transpose(temp), splice_context)
 
-                # delta features
-                with open(feat_file_de, 'rb') as f:
-                    feats = pickle.load(f)
-                #feats[0] = [x for y in feats[0] for x in y]
-                temp = normalize(np.vstack(list(feats[0])))
-                feats_spliced_de = feat_splice(np.transpose(temp), splice_context)
+                temp.append([x for x in feats[0]])
 
-                # delta-delta features
-                with open(feat_file_de_de, 'rb') as f:
-                    feats = pickle.load(f)
-                #feats[0] = [x for y in feats[0] for x in y]
-                temp = normalize(np.vstack(list(feats[0])))
-                feats_spliced_de_de = feat_splice(np.transpose(temp), splice_context)
 
-                feat_dim, num_frames = feats_spliced.shape
+                if num_segments < batch_size:
+                    continue
 
-                num_batches = int(np.floor(num_frames/batch_size))
+                t = np.array([np.array(x) for x in [y for p in temp for y in p]])
+                num_batches = int(np.floor(num_segments/batch_size))
 
                 for batch in range(num_batches):
-                    # current_batch_feats = np.transpose(np.row_stack(
-                    #     (feats_spliced[:, batch*batch_size: (batch+1)*batch_size],
-                    #      feats_spliced_de[:, batch * batch_size: (batch + 1) * batch_size],
-                    #      feats_spliced_de_de[:, batch * batch_size: (batch + 1) * batch_size])))
-                    current_batch_feats = np.transpose(np.row_stack(
-                        (feats_spliced[:, batch * batch_size: (batch + 1) * batch_size])))
-                    current_batch_labels = labels_frames[batch*batch_size: (batch+1)*batch_size]
+
+                    current_batch_feats = np.transpose(t[batch * batch_size: (batch + 1) * batch_size, :, 0:13], (0, 2, 1))
+                    current_batch_feats = current_batch_feats.reshape((batch_size,
+                                                                       current_batch_feats.shape[1],
+                                                                       current_batch_feats.shape[2],
+                                                                       1))
+                    current_batch_labels = labels_segments[batch * batch_size: (batch + 1) * batch_size]
 
                     yield current_batch_feats, current_batch_labels
-
-
 
 
