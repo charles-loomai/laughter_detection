@@ -45,9 +45,12 @@ class DataGenerator(object):
             labels_speech = [x for y in labels_speech for x in y]
 
             shuffle(feat_files_speech)
+
             num_speech_segments = 0
             for idx, feat_file in enumerate(feat_files_speech):
                 #print(feat_file)
+                if feat_file.split("/")[-1].strip('.pickle').split("_")[1] == '0.0':
+                    continue
                 num_speech_segments += int(float(feat_file.split("/")[-1].strip('.pickle').split("_")[1])/100)
                 if num_speech_segments < num_laugh_segments:
                     continue
@@ -71,7 +74,7 @@ class DataGenerator(object):
             for idx, feat_file in enumerate(feat_files):
 
                 label = labels[idx]
-
+                print(feat_file)
                 ses_id = feat_file.split("/")[-1].strip('.pickle').split("_")[0]
                 num_frames = int(feat_file.split("/")[-1].strip('.pickle').split("_")[1])
 
@@ -94,10 +97,15 @@ class DataGenerator(object):
 
                 if num_segments < batch_size:
                     continue
-
+                #print(num_segments)
                 t = np.array([np.array(x) for x in [y for p in temp for y in p]])
+                
                 num_batches = int(np.floor(num_segments/batch_size))
-
+                
+                temp = []
+                num_segments = 0
+                print(t.shape)
+                
                 for batch in range(num_batches):
 
                     current_batch_feats = np.transpose(t[batch * batch_size: (batch + 1) * batch_size, :, 0:13], (0, 2, 1))

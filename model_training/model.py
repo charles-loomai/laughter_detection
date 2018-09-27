@@ -1,6 +1,8 @@
 from keras.models import Model
 from keras.layers import Dense, Input, Dropout, BatchNormalization
 from keras import regularizers
+from keras.callbacks import Callback
+
 
 def create_network_baseline(params):
 
@@ -61,3 +63,22 @@ def train(model, train_generator, val_generator, epochs=100, train_steps_per_epo
                         validation_steps=val_steps_per_epoch)
 
     return model
+
+
+def train_noDataGen(model, train_data, val_data, epochs=100, batch_size=32):
+
+    train_feats = train_data[0]
+    train_labels = train_data[1]
+
+    model.fit(train_feats, train_labels, batch_size=batch_size, epochs=epochs, callbacks=[ValCallback(val_data)])
+#, steps_per_epoch=train_steps_per_epoch)
+
+
+class ValCallback(Callback):
+    def __init__(self, val_data):
+        self.val_data = val_data
+
+    def on_epoch_end(self, epoch, logs={}):
+        x, y = self.val_data
+        loss, acc = self.model.evaluate(x, y, verbose=0)
+        print('\nValidation loss: {}, acc: {}\n'.format(loss, acc))
